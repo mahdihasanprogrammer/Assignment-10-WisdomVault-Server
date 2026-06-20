@@ -39,6 +39,19 @@ async function run() {
         const lessonsCollection = database.collection("lessons")
 
 
+        // ----------------lessons related apis------------------
+
+        // create a new lesson ;
+        app.post('/api/create-lesson', async (req, res) =>{
+            const data = req.body;
+            const createLesson = {
+                ...data,
+                createdAt: new Date()
+            }
+            const result = await lessonsCollection.insertOne(createLesson);
+            res.send(createLesson || {})
+        })
+
         // Send a ping to confirm a successful connection
         await database.command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
