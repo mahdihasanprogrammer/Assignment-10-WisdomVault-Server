@@ -74,6 +74,15 @@ async function run() {
             res.send(result)
         })
 
+        // delete lesson;
+        app.delete("/api/delete-lesson/:lessonId", async(req, res) =>{
+            const lessonId = req.params.lessonId;
+            const deleteLesson = await lessonsCollection.deleteOne({
+                _id: new ObjectId(lessonId)
+            })
+            res.send(deleteLesson)
+        })
+
         // Send a ping to confirm a successful connection
         await database.command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
