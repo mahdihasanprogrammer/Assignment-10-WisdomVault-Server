@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors')
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 
 const app = express();
@@ -49,7 +49,7 @@ async function run() {
                 createdAt: new Date()
             }
             const result = await lessonsCollection.insertOne(createLesson);
-            res.send(createLesson || {})
+            res.send(result || {})
         })
 
         // get my lessons data;
@@ -57,6 +57,20 @@ async function run() {
             const {creatorId} = req.query;
             const cursor =  lessonsCollection.find({creatorId: creatorId});
             const result = await cursor.toArray()
+            res.send(result)
+        })
+
+        // get single lesson by id and update;
+        app.patch('/api/update-lesson/:lessonId', async(req, res) =>{
+            const {lessonId} = req.params;
+            const updateLesson = req.body;
+
+            const query = {_id: new ObjectId(lessonId)}
+            const updateDoc = {
+                $set: {...updateLesson, lastUpdated: new Date()}
+            }
+            
+            const result = await lessonsCollection.updateOne(query, updateDoc)
             res.send(result)
         })
 
