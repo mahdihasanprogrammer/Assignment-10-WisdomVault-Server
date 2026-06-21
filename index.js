@@ -41,6 +41,14 @@ async function run() {
 
         // ----------------lessons related apis------------------
 
+        // get all lessons for all users with search and filtering;
+        app.get("/api/all-lessons", async (req, res) =>{
+
+            const allLessons = await lessonsCollection.find().toArray();
+            res.send(allLessons)
+
+        })
+
         // create a new lesson ;
         app.post('/api/create-lesson', async (req, res) =>{
             const data = req.body;
