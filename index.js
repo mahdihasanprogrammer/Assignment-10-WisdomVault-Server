@@ -41,6 +41,13 @@ async function run() {
 
         // ----------------lessons related apis------------------
 
+        // get featured lesson data ;
+        app.get('/api/featured-lessons', async (req, res) =>{
+            const cursor = lessonsCollection.find({isFeatured: true});
+            const result = await cursor.sort({createdAt: -1}).limit(6).toArray();
+            res.send(result)
+        })
+        
         // get all lessons for all users with search and filtering;
         app.get("/api/all-lessons", async (req, res) => {
             const { search, category, emotionalTone, sortBy} = req.query;
