@@ -41,16 +41,37 @@ async function run() {
 
         // ----------------lessons related apis------------------
 
-        // get featured lesson data ;
-        app.get('/api/featured-lessons', async (req, res) =>{
-            const cursor = lessonsCollection.find({isFeatured: true});
-            const result = await cursor.sort({createdAt: -1}).limit(6).toArray();
+        //1. get lesson data by _id;
+        app.get('/api/public-lessons/:id', async (req, res) => {
+            const { id } = req.params;
+            const result = await lessonsCollection.findOne({ _id: new ObjectId(id) })
             res.send(result)
         })
+
+        // get lessons by author id , the id is dynamic;
+        app.get('/api/author-lessons/:authorId', async (req, res) => {
+
+            const authorId = req.params.authorId;
+            const query = {
+                creatorId: authorId,
+                visibility: "public" 
+            };
         
-        // get all lessons for all users with search and filtering;
+            const total = await lessonsCollection.countDocuments(query);
+            const lessons = await lessonsCollection.find(query).toArray();
+            res.send({ total, lessons });
+        })
+
+        //2. get featured lesson data ;
+        app.get('/api/featured-lessons', async (req, res) => {
+            const cursor = lessonsCollection.find({ isFeatured: true });
+            const result = await cursor.sort({ createdAt: -1 }).limit(6).toArray();
+            res.send(result)
+        })
+
+        //3. get all lessons for all users with search and filtering;
         app.get("/api/all-lessons", async (req, res) => {
-            const { search, category, emotionalTone, sortBy} = req.query;
+            const { search, category, emotionalTone, sortBy } = req.query;
 
             const query = { visibility: "public" }
 
@@ -73,30 +94,21 @@ async function run() {
             const page = Number(req.query.page || 1)
             const perPage = req.query.perPage || 6;
             const skipItems = (page - 1) * perPage;
-            const [total, lessons] =await Promise.all([
+            const [total, lessons] = await Promise.all([
                 lessonsCollection.countDocuments(query),
                 lessonsCollection.find(query)
-                .sort(sortQuery).skip(skipItems).limit(perPage)
-                .toArray()
+                    .sort(sortQuery).skip(skipItems).limit(perPage)
+                    .toArray()
             ])
-          res.status(200).send({
-            total, lessons
-          })
+            res.status(200).send({
+                total, lessons
+            })
 
         })
 
-        // create a new lesson ;
-        app.post('/api/create-lesson', async (req, res) => {
-            const data = req.body;
-            const createLesson = {
-                ...data,
-                createdAt: new Date()
-            }
-            const result = await lessonsCollection.insertOne(createLesson);
-            res.send(result || {})
-        })
 
-        // get my lessons data;
+
+        //4. get my lessons data;
         app.get('/api/my-lessons', async (req, res) => {
             const { creatorId } = req.query;
             const cursor = lessonsCollection.find({ creatorId: creatorId });
@@ -104,7 +116,7 @@ async function run() {
             res.send(result)
         })
 
-        // get single lesson by id and update;
+        //5. get single lesson by id and update;
         app.patch('/api/update-lesson/:lessonId', async (req, res) => {
             const { lessonId } = req.params;
             const updateLesson = req.body;
@@ -118,7 +130,18 @@ async function run() {
             res.send(result)
         })
 
-        // delete lesson;
+        //6. create a new lesson ;
+        app.post('/api/create-lesson', async (req, res) => {
+            const data = req.body;
+            const createLesson = {
+                ...data,
+                createdAt: new Date()
+            }
+            const result = await lessonsCollection.insertOne(createLesson);
+            res.send(result || {})
+        })
+
+        //7. delete lesson;
         app.delete("/api/delete-lesson/:lessonId", async (req, res) => {
             const lessonId = req.params.lessonId;
             const deleteLesson = await lessonsCollection.deleteOne({
