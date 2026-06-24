@@ -36,7 +36,8 @@ async function run() {
 
         // connect to the database;
         const database = client.db(process.env.DB_NAME)
-        const lessonsCollection = database.collection("lessons")
+        const lessonsCollection = database.collection("lessons");
+        const favoritesCollection = database.collection("favorites");
 
 
         // ----------------lessons related apis------------------
@@ -54,9 +55,9 @@ async function run() {
             const authorId = req.params.authorId;
             const query = {
                 creatorId: authorId,
-                visibility: "public" 
+                visibility: "public"
             };
-        
+
             const total = await lessonsCollection.countDocuments(query);
             const lessons = await lessonsCollection.find(query).toArray();
             res.send({ total, lessons });
@@ -107,6 +108,24 @@ async function run() {
         })
 
 
+        // toggle like , add or remove;
+        app.post('/api/lessons/:lessonId/like', async (req, res) => {
+            const { lessonId } = req.params;
+            const { userId } = req.body;
+            const query = { _id: new ObjectId(lessonId) }
+
+            const lesson = await lessonsCollection.findOne(query);
+            const hasLiked = lesson.likes?.includes(userId);
+
+            const updateDoc = hasLiked ?
+                { $pull: { likes: userId }, $inc: { likesCount: -1 } }
+                : { $push: { likes: userId }, $inc: { likesCount: 1 } };
+
+
+            const result = await lessonsCollection.updateOne(query, updateDoc);
+
+            res.send(result)
+        })
 
         //4. get my lessons data;
         app.get('/api/my-lessons', async (req, res) => {
@@ -148,6 +167,51 @@ async function run() {
                 _id: new ObjectId(lessonId)
             })
             res.send(deleteLesson)
+        })
+
+        //----------favorites lessons related apis----------
+
+        // get favorites by lesson id;
+        app.get('/api/favorite-lesson/:id', async(req, res) =>{
+            const {id} = req.params;
+            const {userId} =  req.query;
+            const query ={lessonId: id, userId: userId}
+            const totalFavorite =await favoritesCollection.countDocuments({lessonId: id});
+            const favorite =await favoritesCollection.findOne(query);
+            if(favorite){
+                res.send({totalFavorite, isFavorite: true})
+            } else{
+                res.send({totalFavorite, isFavorite: false})
+            }
+             
+            
+        })
+
+        // toggle , add and count or decrement and remove
+        app.post('/api/lessons/:lessonId/favorite', async (req, res) => {
+            const { lessonId } = req.params;
+            const data = req.body;
+            const query = { lessonId: lessonId, userId: data.userId };
+
+          
+            const existingFavorite = await favoritesCollection.findOne(query);
+
+
+            if (existingFavorite) {
+                const result = await favoritesCollection.deleteOne(query)
+                  const total = await favoritesCollection.countDocuments({lessonId: lessonId});
+                return res.send({ success: true, total: total, isFavorite: false, message: "Removed from favorites" })
+            }
+            else {
+                const newFavorite = {
+                    ...data,
+                    savedAt: new Date()
+                }
+                const result = await favoritesCollection.insertOne(newFavorite);
+                  const total = await favoritesCollection.countDocuments({lessonId: lessonId});
+                return res.status(200).send({ success: true, total: total, isFavorite: true, message: "Added to favorites" })
+            }
+
         })
 
         // Send a ping to confirm a successful connection
