@@ -38,6 +38,7 @@ async function run() {
         const database = client.db(process.env.DB_NAME)
         const lessonsCollection = database.collection("lessons");
         const favoritesCollection = database.collection("favorites");
+        const commentsCollection = database.collection('comments')
 
 
         // ----------------lessons related apis------------------
@@ -172,19 +173,19 @@ async function run() {
         //----------favorites lessons related apis----------
 
         // get favorites by lesson id;
-        app.get('/api/favorite-lesson/:id', async(req, res) =>{
-            const {id} = req.params;
-            const {userId} =  req.query;
-            const query ={lessonId: id, userId: userId}
-            const totalFavorite =await favoritesCollection.countDocuments({lessonId: id});
-            const favorite =await favoritesCollection.findOne(query);
-            if(favorite){
-                res.send({totalFavorite, isFavorite: true})
-            } else{
-                res.send({totalFavorite, isFavorite: false})
+        app.get('/api/favorite-lesson/:id', async (req, res) => {
+            const { id } = req.params;
+            const { userId } = req.query;
+            const query = { lessonId: id, userId: userId }
+            const totalFavorite = await favoritesCollection.countDocuments({ lessonId: id });
+            const favorite = await favoritesCollection.findOne(query);
+            if (favorite) {
+                res.send({ totalFavorite, isFavorite: true })
+            } else {
+                res.send({ totalFavorite, isFavorite: false })
             }
-             
-            
+
+
         })
 
         // toggle , add and count or decrement and remove
@@ -193,13 +194,13 @@ async function run() {
             const data = req.body;
             const query = { lessonId: lessonId, userId: data.userId };
 
-          
+
             const existingFavorite = await favoritesCollection.findOne(query);
 
 
             if (existingFavorite) {
                 const result = await favoritesCollection.deleteOne(query)
-                  const total = await favoritesCollection.countDocuments({lessonId: lessonId});
+                const total = await favoritesCollection.countDocuments({ lessonId: lessonId });
                 return res.send({ success: true, total: total, isFavorite: false, message: "Removed from favorites" })
             }
             else {
@@ -208,9 +209,39 @@ async function run() {
                     savedAt: new Date()
                 }
                 const result = await favoritesCollection.insertOne(newFavorite);
-                  const total = await favoritesCollection.countDocuments({lessonId: lessonId});
+                const total = await favoritesCollection.countDocuments({ lessonId: lessonId });
                 return res.status(200).send({ success: true, total: total, isFavorite: true, message: "Added to favorites" })
             }
+
+        })
+
+
+        //---------- lesson comments related apis----------
+
+        // get comment by lesson id;
+        app.get('/api/lesson-comments/:lessonId', async(req, res) =>{
+            const {lessonId} = req.params;
+            const query = {lessonId: lessonId};
+            const result = await commentsCollection.find(query).sort({createdAt: -1}).toArray();
+            console.log('comment', result)
+            res.send(result)
+        })
+
+        // create a comment;
+        app.post('/api/lesson/create-comment/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const  commentData  = req.body;
+            const newCommentData = {
+                ...commentData,
+                createdAt: new Date()
+            }
+
+            const addCommentToDB = await commentsCollection.insertOne(newCommentData);
+
+            const comments = await commentsCollection.find({lessonId})
+            .sort({createdAt: -1}).toArray()
+
+            res.send(comments)
 
         })
 
