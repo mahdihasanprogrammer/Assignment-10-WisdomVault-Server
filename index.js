@@ -38,7 +38,8 @@ async function run() {
         const database = client.db(process.env.DB_NAME)
         const lessonsCollection = database.collection("lessons");
         const favoritesCollection = database.collection("favorites");
-        const commentsCollection = database.collection('comments')
+        const commentsCollection = database.collection('comments');
+        const lessonsReportsCollection = database.collection('lessonsReports')
 
 
         // ----------------lessons related apis------------------
@@ -223,7 +224,6 @@ async function run() {
             const {lessonId} = req.params;
             const query = {lessonId: lessonId};
             const result = await commentsCollection.find(query).sort({createdAt: -1}).toArray();
-            console.log('comment', result)
             res.send(result)
         })
 
@@ -243,6 +243,21 @@ async function run() {
 
             res.send(comments)
 
+        })
+
+
+        //----------lessons Report related apis----------
+
+        // create a report in a single lesson;
+        app.post('/api/lesson/create-report', async(req, res) =>{
+          
+            const reportData = req.body;
+            const addReport = {
+                ...reportData, 
+                createdAt: new Date()
+            }
+            const insertReport = await lessonsReportsCollection.insertOne(addReport);
+            res.send(insertReport)
         })
 
         // Send a ping to confirm a successful connection
