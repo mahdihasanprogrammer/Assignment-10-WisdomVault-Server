@@ -36,6 +36,7 @@ async function run() {
 
         // connect to the database;
         const database = client.db(process.env.DB_NAME)
+        const userCollection = database.collection('user')
         const lessonsCollection = database.collection("lessons");
         const favoritesCollection = database.collection("favorites");
         const commentsCollection = database.collection('comments');
@@ -171,14 +172,16 @@ async function run() {
             res.send(deleteLesson)
         })
 
+
+
         //----------favorites lessons related apis----------
 
         // get favorites by lesson id;
-        app.get('/api/favorite-lesson/:id', async (req, res) => {
-            const { id } = req.params;
+        app.get('/api/favorite-lesson/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
             const { userId } = req.query;
-            const query = { lessonId: id, userId: userId }
-            const totalFavorite = await favoritesCollection.countDocuments({ lessonId: id });
+            const query = { lessonId: lessonId, userId: userId }
+            const totalFavorite = await favoritesCollection.countDocuments({ lessonId: lessonId });
             const favorite = await favoritesCollection.findOne(query);
             if (favorite) {
                 res.send({ totalFavorite, isFavorite: true })
@@ -187,6 +190,24 @@ async function run() {
             }
 
 
+        })
+
+        // get favorite lesson by user id;
+        app.get('/api/my-favorite/lessons/:userId', async (req, res) => {
+            const { userId } = req.params;
+            const favorites = await favoritesCollection.find({ userId: userId }).sort({savedAt: -1}).toArray();
+
+            for (const favorite of favorites) {
+                const lessonInfo = await lessonsCollection.findOne(
+                    { _id: new ObjectId(favorite.lessonId) },
+                    {
+                        projection:
+                            { lessonTitle: 1, creatorEmail: 1, creatorName: 1, creatorImage: 1 }
+                    })
+                favorite.lessonInfo = lessonInfo
+            }
+
+            res.send(favorites)
         })
 
         // toggle , add and count or decrement and remove
@@ -216,21 +237,29 @@ async function run() {
 
         })
 
+        // delete favorite lesson;
+        app.delete('/api/lesson/delete-favorite/:favoriteLessonId', async (req, res)=>{
+            const {favoriteLessonId} = req.params;
+            const query ={_id: new ObjectId(favoriteLessonId)}
+            const deleteFromFavorite = await favoritesCollection.deleteOne(query);
+            res.send(deleteFromFavorite)
+        })
+
 
         //---------- lesson comments related apis----------
 
         // get comment by lesson id;
-        app.get('/api/lesson-comments/:lessonId', async(req, res) =>{
-            const {lessonId} = req.params;
-            const query = {lessonId: lessonId};
-            const result = await commentsCollection.find(query).sort({createdAt: -1}).toArray();
+        app.get('/api/lesson-comments/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const query = { lessonId: lessonId };
+            const result = await commentsCollection.find(query).sort({ createdAt: -1 }).toArray();
             res.send(result)
         })
 
         // create a comment;
         app.post('/api/lesson/create-comment/:lessonId', async (req, res) => {
             const { lessonId } = req.params;
-            const  commentData  = req.body;
+            const commentData = req.body;
             const newCommentData = {
                 ...commentData,
                 createdAt: new Date()
@@ -238,8 +267,8 @@ async function run() {
 
             const addCommentToDB = await commentsCollection.insertOne(newCommentData);
 
-            const comments = await commentsCollection.find({lessonId})
-            .sort({createdAt: -1}).toArray()
+            const comments = await commentsCollection.find({ lessonId })
+                .sort({ createdAt: -1 }).toArray()
 
             res.send(comments)
 
@@ -249,11 +278,11 @@ async function run() {
         //----------lessons Report related apis----------
 
         // create a report in a single lesson;
-        app.post('/api/lesson/create-report', async(req, res) =>{
-          
+        app.post('/api/lesson/create-report', async (req, res) => {
+
             const reportData = req.body;
             const addReport = {
-                ...reportData, 
+                ...reportData,
                 createdAt: new Date()
             }
             const insertReport = await lessonsReportsCollection.insertOne(addReport);
