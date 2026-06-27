@@ -43,6 +43,32 @@ async function run() {
         const lessonsReportsCollection = database.collection('lessonsReports')
 
 
+        // ----------------user related apis------------------
+
+        // get user and lessons count by user;
+        app.get('/api/users', async (req, res) => {
+            const users = await userCollection.find().toArray();
+            for (user of users) {
+                const lessonCount = await lessonsCollection.countDocuments({ creatorId: user._id.toString() });
+                user.lessonCount = lessonCount
+            }
+
+            res.send(users)
+        })
+
+        // change user role by admin;
+        app.patch('/api/user/:userId', async (req, res) => {
+            const { userId } = req.params;
+            const changeRole = req.body;
+            const query = { _id: new ObjectId(userId) }
+            const result = await userCollection.updateOne(query, { $set: { role: changeRole.updateRole } })
+            res.send(result)
+        })
+
+
+
+
+        // ----------------lessons related apis------------------
         // ----------------lessons related apis------------------
 
         //1. get lesson data by _id;
@@ -60,10 +86,12 @@ async function run() {
                 creatorId: authorId,
                 visibility: "public"
             };
-
-            const total = await lessonsCollection.countDocuments(query);
-            const lessons = await lessonsCollection.find(query).toArray();
-            res.send({ total, lessons });
+            const [total, lessons, userAllLessonsCount] = await Promise.all([
+                lessonsCollection.countDocuments(query),
+                lessonsCollection.find(query).sort({ createdAt: -1 }).toArray(),
+                lessonsCollection.countDocuments({ creatorId: authorId })
+            ])
+            res.send({ total, lessons, userAllLessonsCount });
         })
 
         //2. get featured lesson data ;
@@ -134,7 +162,7 @@ async function run() {
         app.get('/api/my-lessons', async (req, res) => {
             const { creatorId } = req.query;
             const cursor = lessonsCollection.find({ creatorId: creatorId });
-            const result = await cursor.toArray()
+            const result = await cursor.sort({ createdAt: -1 }).toArray()
             res.send(result)
         })
 
@@ -195,7 +223,7 @@ async function run() {
         // get favorite lesson by user id;
         app.get('/api/my-favorite/lessons/:userId', async (req, res) => {
             const { userId } = req.params;
-            const favorites = await favoritesCollection.find({ userId: userId }).sort({savedAt: -1}).toArray();
+            const favorites = await favoritesCollection.find({ userId: userId }).sort({ savedAt: -1 }).toArray();
 
             for (const favorite of favorites) {
                 const lessonInfo = await lessonsCollection.findOne(
@@ -238,9 +266,9 @@ async function run() {
         })
 
         // delete favorite lesson;
-        app.delete('/api/lesson/delete-favorite/:favoriteLessonId', async (req, res)=>{
-            const {favoriteLessonId} = req.params;
-            const query ={_id: new ObjectId(favoriteLessonId)}
+        app.delete('/api/lesson/delete-favorite/:favoriteLessonId', async (req, res) => {
+            const { favoriteLessonId } = req.params;
+            const query = { _id: new ObjectId(favoriteLessonId) }
             const deleteFromFavorite = await favoritesCollection.deleteOne(query);
             res.send(deleteFromFavorite)
         })
@@ -277,6 +305,48 @@ async function run() {
 
         //----------lessons Report related apis----------
 
+        // get reports in a single lesson;
+        app.get('/api/reported-lessons', async (req, res) => {
+
+
+            const pipeline = [
+                {$sort: {createdAt: -1}},
+                {
+                    $group:
+                    {
+                        _id: "$lessonId",
+                        countReport: { $sum: 1 },
+                        lessonTitle: { $first: "$lessonTitle" },
+                        allReports: {
+                            $push:
+                            {
+                                reporterUserEmail: "$reporterUserEmail",
+                                reportReason: "$reportReason",
+                                reportDetails: "$reportDetails"
+
+                            }
+                        }
+                    }
+
+                },
+                {
+                    $project: {
+                        lessonId: "$_id",
+                        countReport: 1,
+                        lessonTitle: 1,
+                        allReports: 1,
+                        _id: 0
+
+                    }
+                }
+                
+            ]
+            const reports = await lessonsReportsCollection.aggregate(pipeline).toArray();
+
+            // }))
+            res.send(reports || [])
+        })
+
         // create a report in a single lesson;
         app.post('/api/lesson/create-report', async (req, res) => {
 
@@ -287,6 +357,25 @@ async function run() {
             }
             const insertReport = await lessonsReportsCollection.insertOne(addReport);
             res.send(insertReport)
+        })
+
+        // clear all report from a lesson;
+        app.delete('/api/delete-reports/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const query = { lessonId: lessonId }
+            const result = await lessonsReportsCollection.deleteMany(query);
+            res.send(result)
+        })
+
+        // delete reported lesson and all reports from this lesson;
+        app.delete('/api/delete-reports/lesson/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const query = { lessonId: lessonId }
+            const deleteReport = await lessonsReportsCollection.deleteMany(query);
+
+            const deleteLesson = await lessonsCollection.deleteOne({_id: new ObjectId(lessonId)});
+
+            res.send({success: true})
         })
 
         // Send a ping to confirm a successful connection
