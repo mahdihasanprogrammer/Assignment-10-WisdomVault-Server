@@ -101,6 +101,41 @@ async function run() {
             res.send(result)
         })
 
+        // get top contributors data , and show in a home page;
+        app.get('/api/top-contributors', async (req, res) => {
+            const pipeline = [
+                // {$match: {status:"Approved"}},
+                {
+                    $group:
+                    {
+                        _id: "$creatorId",
+                        creatorName: { $first: '$creatorName' },
+                        creatorImage: { $first: "$creatorImage" },
+                        creatorEmail: { $first: "$creatorEmail" },
+                        accessLevel: {$first: "$accessLevel"},
+                        contribute: { $sum: 1 }
+                    },
+
+                },
+                { $sort: { contribute: -1 } },
+                {
+                    $project:
+                    {
+                        creatorId: "$_id",
+                        creatorName: 1,
+                        creatorImage: 1,
+                        creatorEmail: 1,
+                        contribute: 1,
+                        accessLevel: 1,
+                        _id: 0
+                    }
+                },
+                { $limit: 3 }
+            ]
+            const topContributors = await lessonsCollection.aggregate(pipeline).toArray();
+            res.send(topContributors)
+        })
+
         //3. get all lessons for all users with search and filtering;
         app.get("/api/all-lessons", async (req, res) => {
             const { search, category, emotionalTone, sortBy } = req.query;
@@ -227,11 +262,11 @@ async function run() {
                 dayEnd.setDate(dayEnd.getDate() - i)
 
                 const lessonCount = await lessonsCollection.countDocuments({
-                    createdAt: {$gte: dayStart, $lte: dayEnd}
+                    createdAt: { $gte: dayStart, $lte: dayEnd }
 
                 })
                 const userCount = await userCollection.countDocuments({
-                    createdAt:{$gte: dayStart, $lte: dayEnd}
+                    createdAt: { $gte: dayStart, $lte: dayEnd }
                 })
                 const dateString = dayStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
