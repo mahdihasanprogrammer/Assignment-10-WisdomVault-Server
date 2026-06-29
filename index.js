@@ -40,7 +40,8 @@ async function run() {
         const lessonsCollection = database.collection("lessons");
         const favoritesCollection = database.collection("favorites");
         const commentsCollection = database.collection('comments');
-        const lessonsReportsCollection = database.collection('lessonsReports')
+        const lessonsReportsCollection = database.collection('lessonsReports');
+        const paymentInfoCollection = database.collection('paymentInfo');
 
         // ----------------user related apis------------------
 
@@ -103,8 +104,9 @@ async function run() {
 
         // get top contributors data , and show in a home page;
         app.get('/api/top-contributors', async (req, res) => {
+
             const pipeline = [
-                // {$match: {status:"Approved"}},
+                { $match: { status: "Approved" } },
                 {
                     $group:
                     {
@@ -112,7 +114,7 @@ async function run() {
                         creatorName: { $first: '$creatorName' },
                         creatorImage: { $first: "$creatorImage" },
                         creatorEmail: { $first: "$creatorEmail" },
-                        accessLevel: {$first: "$accessLevel"},
+                        accessLevel: { $first: "$accessLevel" },
                         contribute: { $sum: 1 }
                     },
 
@@ -135,6 +137,65 @@ async function run() {
             const topContributors = await lessonsCollection.aggregate(pipeline).toArray();
             res.send(topContributors)
         })
+
+
+        // get most saved lesson and show in home page;
+        app.get('/api/most-saved-lessons', async (req, res) => {
+            try {
+                const pipeline = [
+                  
+                    {
+                        $group: {
+                            _id: "$lessonId",
+                            saveCount: { $sum: 1 }
+                        }
+                    }, // ২. সবচেয়ে বেশি সেভ হওয়া আইডিগুলো উপরে শর্ট করা
+                    { $sort: { saveCount: -1 } },
+                 
+                    { $limit: 6 },
+                 
+                    {
+                        $lookup: {
+                            from: "lessons", 
+                            let: { lesson_id: "$_id" },
+                            pipeline: [
+                                {
+                                    $match: {
+                                        $expr: {
+                                            $eq: [
+                                                "$_id",
+                                                { $toObjectId: "$$lesson_id" } 
+                                            ]
+                                        }
+                                    }
+                                }
+                            ],
+                            as: "lessonDetails"
+                        }
+                    },
+                   
+                    { $unwind: "$lessonDetails" },
+                  
+                    {
+                        $project: {
+                            _id: "$lessonDetails._id",
+                            title: "$lessonDetails.lessonTitle", 
+                            category: "$lessonDetails.category",
+                            thumbnail: "$lessonDetails.lessonImage", 
+                            creatorName: "$lessonDetails.creatorName",
+                            creatorImage: "$lessonDetails.creatorImage",
+                            saveCount: 1
+                        }
+                    }
+                ];
+
+                const mostSavedLessons = await favoritesCollection.aggregate(pipeline).toArray();
+                res.send(mostSavedLessons);
+            } catch (error) {
+                console.error("Aggregation error:", error);
+                res.status(500).send({ message: "Failed to fetch top saved lessons" });
+            }
+        });
 
         //3. get all lessons for all users with search and filtering;
         app.get("/api/all-lessons", async (req, res) => {
@@ -543,6 +604,26 @@ async function run() {
             const deleteReport = await lessonsReportsCollection.deleteMany(query);
 
             const deleteLesson = await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
+
+            res.send({ success: true })
+        })
+
+
+
+        // -----payment info and update user isPremium: true;--------
+        app.post('/api/payment-info', async (req, res) => {
+            const paymentInfo = req.body;
+            const newData = {
+                ...paymentInfo,
+                paymentAt: new Date()
+            }
+            const addPaymentInfoToDB = await paymentInfoCollection.insertOne(newData);
+
+            // update user premium; 
+            const user = userCollection.updateOne(
+                { email: paymentInfo.email },
+                { $set: { isPremium: true } }
+            )
 
             res.send({ success: true })
         })
