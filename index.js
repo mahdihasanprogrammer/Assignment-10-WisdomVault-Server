@@ -42,7 +42,6 @@ async function run() {
         const commentsCollection = database.collection('comments');
         const lessonsReportsCollection = database.collection('lessonsReports')
 
-
         // ----------------user related apis------------------
 
         // get user and lessons count by user;
@@ -96,7 +95,8 @@ async function run() {
 
         //2. get featured lesson data ;
         app.get('/api/featured-lessons', async (req, res) => {
-            const cursor = lessonsCollection.find({ isFeatured: true });
+            const cursor = lessonsCollection.find(
+                { isFeatured: true, status: "Approved" });
             const result = await cursor.sort({ createdAt: -1 }).limit(6).toArray();
             res.send(result)
         })
@@ -105,7 +105,7 @@ async function run() {
         app.get("/api/all-lessons", async (req, res) => {
             const { search, category, emotionalTone, sortBy } = req.query;
 
-            const query = { visibility: "public" }
+            const query = { visibility: "public", status: "Approved" }
 
             if (search) {
                 query.$or = [
@@ -126,7 +126,9 @@ async function run() {
             const page = Number(req.query.page || 1)
             const perPage = req.query.perPage || 6;
             const skipItems = (page - 1) * perPage;
+
             const [total, lessons] = await Promise.all([
+
                 lessonsCollection.countDocuments(query),
                 lessonsCollection.find(query)
                     .sort(sortQuery).skip(skipItems).limit(perPage)
@@ -199,6 +201,138 @@ async function run() {
             })
             res.send(deleteLesson)
         })
+
+
+
+        // --------------------admin handle this api;----------------
+
+        // admin dashboard;
+        app.get('/api/admin/dashboard/info', async (req, res) => {
+
+            const start = new Date();
+            start.setHours(0, 0, 0, 0);
+
+            const end = new Date();
+            end.setHours(23, 59, 59, 999)
+
+            // 7 days date;
+            const chartData = [];
+            for (let i = 6; i >= 0; i--) {
+                const dayStart = new Date();
+                dayStart.setHours(0, 0, 0, 0);
+                dayStart.setDate(dayStart.getDate() - i);
+
+                const dayEnd = new Date();
+                dayEnd.setHours(23, 59, 59, 999);
+                dayEnd.setDate(dayEnd.getDate() - i)
+
+                const lessonCount = await lessonsCollection.countDocuments({
+                    createdAt: {$gte: dayStart, $lte: dayEnd}
+
+                })
+                const userCount = await userCollection.countDocuments({
+                    createdAt:{$gte: dayStart, $lte: dayEnd}
+                })
+                const dateString = dayStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                chartData.push({
+                    date: dateString,
+                    lessons: lessonCount,
+                    users: userCount
+                })
+            }
+
+            const pipeline = [
+                { $group: { _id: "$lessonId" } },
+                { $project: { lessonId: "$_id", _id: 0 } }
+            ]
+
+            const pipeline1 = [
+                {
+                    $group:
+                    {
+                        _id: "$creatorId",
+                        creatorName: { $first: '$creatorName' },
+                        creatorImage: { $first: "$creatorImage" },
+                        contribute: { $sum: 1 }
+                    },
+
+                },
+                { $sort: { contribute: -1 } },
+                {
+                    $project:
+                    {
+                        creatorId: "$_id",
+                        creatorName: 1,
+                        creatorImage: 1,
+                        contribute: 1,
+                        _id: 0
+                    }
+                },
+                { $limit: 3 }
+            ]
+
+            const [totalUser, totalPublicLessons, totalReportedLessons, todayNewLesson, topContributors] = await Promise.all([
+
+                userCollection?.countDocuments(),
+                lessonsCollection.countDocuments({ visibility: "public" }), lessonsReportsCollection.aggregate(pipeline).toArray(),
+                lessonsCollection.find({
+                    createdAt: {
+                        $gte: start,
+                        $lte: end
+                    }
+                }).toArray(),
+                lessonsCollection.aggregate(pipeline1).toArray(),
+
+            ])
+            res.send({ totalUser, totalPublicLessons, totalReportedLessons, todayNewLesson, topContributors, chartData })
+
+        })
+
+
+        // get all lessons (Admin)
+        app.get('/api/all-lessons/admin', async (req, res) => {
+            const { category, visibility } = req.query;
+            const query = {};
+            if (category) query.category = category;
+            if (visibility) query.visibility = visibility;
+
+            const [allLessons, publicLessonsCount, privateLessonsCount, reportCount] = await Promise.all([
+                lessonsCollection.find(query).sort({ status: -1 }).toArray(),
+                lessonsCollection.countDocuments({ ...query, visibility: "public" }), lessonsCollection.countDocuments({ ...query, visibility: "private" }),
+                lessonsReportsCollection.countDocuments(),
+            ])
+
+            res.send({ allLessons, publicLessonsCount, privateLessonsCount, reportCount })
+        })
+
+        // change lesson status to approve;
+        app.patch('/api/lesson/change-status/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const query = { _id: new ObjectId(lessonId) }
+            const updateDoc = { $set: { status: "Approved" } }
+            const result = await lessonsCollection.updateOne(query, updateDoc);
+            res.send({ success: true })
+        })
+
+        // change isFeatured field in a lesson ;
+        app.patch('/api/lesson/featured/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const updateField = req.body;
+            const query = { _id: new ObjectId(lessonId) };
+            const updateDoc = { $set: { isFeatured: updateField.currentStatus } };
+            const result = await lessonsCollection.updateOne(query, updateDoc);
+            res.send({ success: true })
+        })
+
+
+        // delete lesson permanently;
+        app.delete('/api/delete-lesson/:lessonId', async (req, res) => {
+            const { lessonId } = req.params;
+            const result = await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
+            res.send(result)
+        })
+
 
 
 
@@ -310,7 +444,7 @@ async function run() {
 
 
             const pipeline = [
-                {$sort: {createdAt: -1}},
+                { $sort: { createdAt: -1 } },
                 {
                     $group:
                     {
@@ -339,7 +473,7 @@ async function run() {
 
                     }
                 }
-                
+
             ]
             const reports = await lessonsReportsCollection.aggregate(pipeline).toArray();
 
@@ -373,9 +507,9 @@ async function run() {
             const query = { lessonId: lessonId }
             const deleteReport = await lessonsReportsCollection.deleteMany(query);
 
-            const deleteLesson = await lessonsCollection.deleteOne({_id: new ObjectId(lessonId)});
+            const deleteLesson = await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
 
-            res.send({success: true})
+            res.send({ success: true })
         })
 
         // Send a ping to confirm a successful connection
