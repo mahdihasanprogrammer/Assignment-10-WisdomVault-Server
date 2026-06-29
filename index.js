@@ -36,17 +36,67 @@ async function run() {
 
         // connect to the database;
         const database = client.db(process.env.DB_NAME)
-        const userCollection = database.collection('user')
+        const userCollection = database.collection('user');
+         const sessionCollection = database.collection('session');
         const lessonsCollection = database.collection("lessons");
         const favoritesCollection = database.collection("favorites");
         const commentsCollection = database.collection('comments');
         const lessonsReportsCollection = database.collection('lessonsReports');
         const paymentInfoCollection = database.collection('paymentInfo');
 
+
+        // middleware, 
+        const verifyToken = async (req, res, next) => {
+            const authHeader = req.headers?.authorization;
+
+            if (!authHeader) {
+                return res.status(401).send({ message: 'Unauthorized access' })
+            }
+
+            const token = authHeader.split(' ')[1];
+
+            if (!token) {
+                return res.status(401).send({ message: 'Unauthorized access' })
+            }
+            const query = { token: token }
+
+            const session = await sessionCollection.findOne(query);
+
+            if (!session) {
+                return res.status(401).send({ message: 'Unauthorized access' })
+            }
+            const userId = session?.userId
+            const user = await userCollection.findOne({
+                _id: userId
+            });
+            if (!user) {
+                return res.status(401).send({ message: 'Unauthorized access' })
+            }
+            req.user = user;
+            next()
+        }
+
+
+        // must be used after verifyToken middleware;
+        const verifyAdmin = async (req, res, next) => {
+            if (req.user?.userRole !== 'admin') {
+                return res.status(403).send({ message: "Forbidden" })
+            }
+            next()
+        }
+
+        const verifyUser = async (req, res, next) => {
+            if (req.user?.userRole !== "user") {
+                return res.status(403).send({ message: "Forbidden" })
+            }
+            next()
+        }
+
+
         // ----------------user related apis------------------
 
         // get user and lessons count by user;
-        app.get('/api/users', async (req, res) => {
+        app.get('/api/users',verifyToken, verifyUser, async (req, res) => {
             const users = await userCollection.find().toArray();
             for (user of users) {
                 const lessonCount = await lessonsCollection.countDocuments({ creatorId: user._id.toString() });
@@ -57,7 +107,7 @@ async function run() {
         })
 
         // change user role by admin;
-        app.patch('/api/user/:userId', async (req, res) => {
+        app.patch('/api/user/:userId',verifyToken, verifyAdmin, async (req, res) => {
             const { userId } = req.params;
             const changeRole = req.body;
             const query = { _id: new ObjectId(userId) }
@@ -79,7 +129,7 @@ async function run() {
         })
 
         // get lessons by author id , the id is dynamic;
-        app.get('/api/author-lessons/:authorId', async (req, res) => {
+        app.get('/api/author-lessons/:authorId',   async (req, res) => {
 
             const authorId = req.params.authorId;
             const query = {
@@ -143,7 +193,7 @@ async function run() {
         app.get('/api/most-saved-lessons', async (req, res) => {
             try {
                 const pipeline = [
-                  
+
                     {
                         $group: {
                             _id: "$lessonId",
@@ -151,12 +201,12 @@ async function run() {
                         }
                     }, // ২. সবচেয়ে বেশি সেভ হওয়া আইডিগুলো উপরে শর্ট করা
                     { $sort: { saveCount: -1 } },
-                 
+
                     { $limit: 6 },
-                 
+
                     {
                         $lookup: {
-                            from: "lessons", 
+                            from: "lessons",
                             let: { lesson_id: "$_id" },
                             pipeline: [
                                 {
@@ -164,7 +214,7 @@ async function run() {
                                         $expr: {
                                             $eq: [
                                                 "$_id",
-                                                { $toObjectId: "$$lesson_id" } 
+                                                { $toObjectId: "$$lesson_id" }
                                             ]
                                         }
                                     }
@@ -173,15 +223,15 @@ async function run() {
                             as: "lessonDetails"
                         }
                     },
-                   
+
                     { $unwind: "$lessonDetails" },
-                  
+
                     {
                         $project: {
                             _id: "$lessonDetails._id",
-                            title: "$lessonDetails.lessonTitle", 
+                            title: "$lessonDetails.lessonTitle",
                             category: "$lessonDetails.category",
-                            thumbnail: "$lessonDetails.lessonImage", 
+                            thumbnail: "$lessonDetails.lessonImage",
                             creatorName: "$lessonDetails.creatorName",
                             creatorImage: "$lessonDetails.creatorImage",
                             saveCount: 1
@@ -238,7 +288,7 @@ async function run() {
 
 
         // toggle like , add or remove;
-        app.post('/api/lessons/:lessonId/like', async (req, res) => {
+        app.post('/api/lessons/:lessonId/like',verifyToken,verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const { userId } = req.body;
             const query = { _id: new ObjectId(lessonId) }
@@ -257,7 +307,7 @@ async function run() {
         })
 
         //4. get my lessons data;
-        app.get('/api/my-lessons', async (req, res) => {
+        app.get('/api/my-lessons',verifyToken, verifyUser, async (req, res) => {
             const { creatorId } = req.query;
             const cursor = lessonsCollection.find({ creatorId: creatorId });
             const result = await cursor.sort({ createdAt: -1 }).toArray()
@@ -265,7 +315,7 @@ async function run() {
         })
 
         //5. get single lesson by id and update;
-        app.patch('/api/update-lesson/:lessonId', async (req, res) => {
+        app.patch('/api/update-lesson/:lessonId',verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const updateLesson = req.body;
 
@@ -279,7 +329,7 @@ async function run() {
         })
 
         //6. create a new lesson ;
-        app.post('/api/create-lesson', async (req, res) => {
+        app.post('/api/create-lesson',verifyToken,verifyUser, async (req, res) => {
             const data = req.body;
             const createLesson = {
                 ...data,
@@ -290,7 +340,7 @@ async function run() {
         })
 
         //7. delete lesson;
-        app.delete("/api/delete-lesson/:lessonId", async (req, res) => {
+        app.delete("/api/delete-lesson/:lessonId", verifyToken,verifyUser, async (req, res) => {
             const lessonId = req.params.lessonId;
             const deleteLesson = await lessonsCollection.deleteOne({
                 _id: new ObjectId(lessonId)
@@ -303,7 +353,7 @@ async function run() {
         // --------------------admin handle this api;----------------
 
         // admin dashboard;
-        app.get('/api/admin/dashboard/info', async (req, res) => {
+        app.get('/api/admin/dashboard/info',verifyToken,verifyAdmin, async (req, res) => {
 
             const start = new Date();
             start.setHours(0, 0, 0, 0);
@@ -387,7 +437,7 @@ async function run() {
 
 
         // get all lessons (Admin)
-        app.get('/api/all-lessons/admin', async (req, res) => {
+        app.get('/api/all-lessons/admin',verifyToken,verifyAdmin, async (req, res) => {
             const { category, visibility } = req.query;
             const query = {};
             if (category) query.category = category;
@@ -403,7 +453,7 @@ async function run() {
         })
 
         // change lesson status to approve;
-        app.patch('/api/lesson/change-status/:lessonId', async (req, res) => {
+        app.patch('/api/lesson/change-status/:lessonId',verifyToken,verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const query = { _id: new ObjectId(lessonId) }
             const updateDoc = { $set: { status: "Approved" } }
@@ -412,7 +462,7 @@ async function run() {
         })
 
         // change isFeatured field in a lesson ;
-        app.patch('/api/lesson/featured/:lessonId', async (req, res) => {
+        app.patch('/api/lesson/featured/:lessonId',verifyToken,verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const updateField = req.body;
             const query = { _id: new ObjectId(lessonId) };
@@ -423,7 +473,7 @@ async function run() {
 
 
         // delete lesson permanently;
-        app.delete('/api/delete-lesson/:lessonId', async (req, res) => {
+        app.delete('/api/delete-lesson/:lessonId',verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const result = await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
             res.send(result)
@@ -435,7 +485,7 @@ async function run() {
         //----------favorites lessons related apis----------
 
         // get favorites by lesson id;
-        app.get('/api/favorite-lesson/:lessonId', async (req, res) => {
+        app.get('/api/favorite-lesson/:lessonId',verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const { userId } = req.query;
             const query = { lessonId: lessonId, userId: userId }
@@ -451,7 +501,7 @@ async function run() {
         })
 
         // get favorite lesson by user id;
-        app.get('/api/my-favorite/lessons/:userId', async (req, res) => {
+        app.get('/api/my-favorite/lessons/:userId',verifyToken,verifyUser, async (req, res) => {
             const { userId } = req.params;
             const favorites = await favoritesCollection.find({ userId: userId }).sort({ savedAt: -1 }).toArray();
 
@@ -469,7 +519,7 @@ async function run() {
         })
 
         // toggle , add and count or decrement and remove
-        app.post('/api/lessons/:lessonId/favorite', async (req, res) => {
+        app.post('/api/lessons/:lessonId/favorite',verifyToken,verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const data = req.body;
             const query = { lessonId: lessonId, userId: data.userId };
@@ -496,7 +546,7 @@ async function run() {
         })
 
         // delete favorite lesson;
-        app.delete('/api/lesson/delete-favorite/:favoriteLessonId', async (req, res) => {
+        app.delete('/api/lesson/delete-favorite/:favoriteLessonId',verifyToken,verifyUser, async (req, res) => {
             const { favoriteLessonId } = req.params;
             const query = { _id: new ObjectId(favoriteLessonId) }
             const deleteFromFavorite = await favoritesCollection.deleteOne(query);
@@ -515,7 +565,7 @@ async function run() {
         })
 
         // create a comment;
-        app.post('/api/lesson/create-comment/:lessonId', async (req, res) => {
+        app.post('/api/lesson/create-comment/:lessonId',verifyToken,verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const commentData = req.body;
             const newCommentData = {
@@ -536,7 +586,7 @@ async function run() {
         //----------lessons Report related apis----------
 
         // get reports in a single lesson;
-        app.get('/api/reported-lessons', async (req, res) => {
+        app.get('/api/reported-lessons',verifyToken,verifyUser, async (req, res) => {
 
 
             const pipeline = [
@@ -578,7 +628,7 @@ async function run() {
         })
 
         // create a report in a single lesson;
-        app.post('/api/lesson/create-report', async (req, res) => {
+        app.post('/api/lesson/create-report',verifyToken, verifyUser, async (req, res) => {
 
             const reportData = req.body;
             const addReport = {
@@ -590,7 +640,7 @@ async function run() {
         })
 
         // clear all report from a lesson;
-        app.delete('/api/delete-reports/:lessonId', async (req, res) => {
+        app.delete('/api/delete-reports/:lessonId',verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const query = { lessonId: lessonId }
             const result = await lessonsReportsCollection.deleteMany(query);
@@ -598,7 +648,7 @@ async function run() {
         })
 
         // delete reported lesson and all reports from this lesson;
-        app.delete('/api/delete-reports/lesson/:lessonId', async (req, res) => {
+        app.delete('/api/delete-reports/lesson/:lessonId',verifyToken,verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const query = { lessonId: lessonId }
             const deleteReport = await lessonsReportsCollection.deleteMany(query);
@@ -611,7 +661,7 @@ async function run() {
 
 
         // -----payment info and update user isPremium: true;--------
-        app.post('/api/payment-info', async (req, res) => {
+        app.post('/api/payment-info',verifyToken,verifyUser, async (req, res) => {
             const paymentInfo = req.body;
             const newData = {
                 ...paymentInfo,
