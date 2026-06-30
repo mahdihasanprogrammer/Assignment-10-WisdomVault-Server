@@ -96,7 +96,7 @@ async function run() {
         // ----------------user related apis------------------
 
         // get user and lessons count by user;
-        app.get('/api/users',verifyToken, verifyUser, async (req, res) => {
+        app.get('/api/users',verifyToken, verifyAdmin, async (req, res) => {
             const users = await userCollection.find().toArray();
             for (user of users) {
                 const lessonCount = await lessonsCollection.countDocuments({ creatorId: user._id.toString() });
@@ -586,7 +586,7 @@ async function run() {
         //----------lessons Report related apis----------
 
         // get reports in a single lesson;
-        app.get('/api/reported-lessons',verifyToken,verifyUser, async (req, res) => {
+        app.get('/api/reported-lessons',verifyToken,verifyAdmin, async (req, res) => {
 
 
             const pipeline = [
