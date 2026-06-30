@@ -37,7 +37,7 @@ async function run() {
         // connect to the database;
         const database = client.db(process.env.DB_NAME)
         const userCollection = database.collection('user');
-         const sessionCollection = database.collection('session');
+        const sessionCollection = database.collection('session');
         const lessonsCollection = database.collection("lessons");
         const favoritesCollection = database.collection("favorites");
         const commentsCollection = database.collection('comments');
@@ -93,10 +93,10 @@ async function run() {
         }
 
 
-        // ----------------user related apis------------------
+        // ----------------user collection related apis------------------
 
         // get user and lessons count by user;
-        app.get('/api/users',verifyToken, verifyAdmin, async (req, res) => {
+        app.get('/api/users', verifyToken, verifyAdmin, async (req, res) => {
             const users = await userCollection.find().toArray();
             for (user of users) {
                 const lessonCount = await lessonsCollection.countDocuments({ creatorId: user._id.toString() });
@@ -107,7 +107,7 @@ async function run() {
         })
 
         // change user role by admin;
-        app.patch('/api/user/:userId',verifyToken, verifyAdmin, async (req, res) => {
+        app.patch('/api/user/:userId', verifyToken, verifyAdmin, async (req, res) => {
             const { userId } = req.params;
             const changeRole = req.body;
             const query = { _id: new ObjectId(userId) }
@@ -129,7 +129,7 @@ async function run() {
         })
 
         // get lessons by author id , the id is dynamic;
-        app.get('/api/author-lessons/:authorId',   async (req, res) => {
+        app.get('/api/author-lessons/:authorId', async (req, res) => {
 
             const authorId = req.params.authorId;
             const query = {
@@ -288,7 +288,7 @@ async function run() {
 
 
         // toggle like , add or remove;
-        app.post('/api/lessons/:lessonId/like',verifyToken,verifyUser, async (req, res) => {
+        app.post('/api/lessons/:lessonId/like', verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const { userId } = req.body;
             const query = { _id: new ObjectId(lessonId) }
@@ -307,7 +307,7 @@ async function run() {
         })
 
         //4. get my lessons data;
-        app.get('/api/my-lessons',verifyToken, verifyUser, async (req, res) => {
+        app.get('/api/my-lessons', verifyToken, verifyUser, async (req, res) => {
             const { creatorId } = req.query;
             const cursor = lessonsCollection.find({ creatorId: creatorId });
             const result = await cursor.sort({ createdAt: -1 }).toArray()
@@ -315,7 +315,7 @@ async function run() {
         })
 
         //5. get single lesson by id and update;
-        app.patch('/api/update-lesson/:lessonId',verifyToken, verifyUser, async (req, res) => {
+        app.patch('/api/update-lesson/:lessonId', verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const updateLesson = req.body;
 
@@ -329,7 +329,7 @@ async function run() {
         })
 
         //6. create a new lesson ;
-        app.post('/api/create-lesson',verifyToken,verifyUser, async (req, res) => {
+        app.post('/api/create-lesson', verifyToken, verifyUser, async (req, res) => {
             const data = req.body;
             const createLesson = {
                 ...data,
@@ -340,7 +340,7 @@ async function run() {
         })
 
         //7. delete lesson;
-        app.delete("/api/delete-lesson/:lessonId", verifyToken,verifyUser, async (req, res) => {
+        app.delete("/api/delete-lesson/:lessonId", verifyToken, verifyUser, async (req, res) => {
             const lessonId = req.params.lessonId;
             const deleteLesson = await lessonsCollection.deleteOne({
                 _id: new ObjectId(lessonId)
@@ -353,7 +353,7 @@ async function run() {
         // --------------------admin handle this api;----------------
 
         // admin dashboard;
-        app.get('/api/admin/dashboard/info',verifyToken,verifyAdmin, async (req, res) => {
+        app.get('/api/admin/dashboard/info', verifyToken, verifyAdmin, async (req, res) => {
 
             const start = new Date();
             start.setHours(0, 0, 0, 0);
@@ -437,7 +437,7 @@ async function run() {
 
 
         // get all lessons (Admin)
-        app.get('/api/all-lessons/admin',verifyToken,verifyAdmin, async (req, res) => {
+        app.get('/api/all-lessons/admin', verifyToken, verifyAdmin, async (req, res) => {
             const { category, visibility } = req.query;
             const query = {};
             if (category) query.category = category;
@@ -453,7 +453,7 @@ async function run() {
         })
 
         // change lesson status to approve;
-        app.patch('/api/lesson/change-status/:lessonId',verifyToken,verifyAdmin, async (req, res) => {
+        app.patch('/api/lesson/change-status/:lessonId', verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const query = { _id: new ObjectId(lessonId) }
             const updateDoc = { $set: { status: "Approved" } }
@@ -462,7 +462,7 @@ async function run() {
         })
 
         // change isFeatured field in a lesson ;
-        app.patch('/api/lesson/featured/:lessonId',verifyToken,verifyAdmin, async (req, res) => {
+        app.patch('/api/lesson/featured/:lessonId', verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const updateField = req.body;
             const query = { _id: new ObjectId(lessonId) };
@@ -473,7 +473,7 @@ async function run() {
 
 
         // delete lesson permanently;
-        app.delete('/api/delete-lesson/:lessonId/admin',verifyToken, verifyAdmin, async (req, res) => {
+        app.delete('/api/delete-lesson/:lessonId/admin', verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const result = await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
             res.send(result)
@@ -485,7 +485,7 @@ async function run() {
         //----------favorites lessons related apis----------
 
         // get favorites by lesson id;
-        app.get('/api/favorite-lesson/:lessonId',verifyToken, verifyUser, async (req, res) => {
+        app.get('/api/favorite-lesson/:lessonId', verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const { userId } = req.query;
             const query = { lessonId: lessonId, userId: userId }
@@ -501,25 +501,45 @@ async function run() {
         })
 
         // get favorite lesson by user id;
-        app.get('/api/my-favorite/lessons/:userId',verifyToken,verifyUser, async (req, res) => {
+        app.get('/api/my-favorite/lessons/:userId', verifyToken, verifyUser, async (req, res) => {
             const { userId } = req.params;
-            const favorites = await favoritesCollection.find({ userId: userId }).sort({ savedAt: -1 }).toArray();
-
-            for (const favorite of favorites) {
-                const lessonInfo = await lessonsCollection.findOne(
-                    { _id: new ObjectId(favorite.lessonId) },
-                    {
-                        projection:
-                            { lessonTitle: 1, creatorEmail: 1, creatorName: 1, creatorImage: 1 }
-                    })
-                favorite.lessonInfo = lessonInfo
-            }
+            const favorites = await favoritesCollection.aggregate([
+                {
+                    $match: {
+                        userId: userId
+                    }
+                },
+                {
+                    $addFields: {
+                        lessonObjectId: {
+                            $toObjectId: "$lessonId"
+                        }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "lessons",
+                        localField: "lessonObjectId",
+                        foreignField: "_id",
+                        as: "lessonInfo"
+                    }
+                },
+                {
+                    $unwind: "$lessonInfo"
+                },
+                {
+                    $sort: {
+                        savedAt: -1
+                    }
+                }
+            ]).toArray();
+            
 
             res.send(favorites)
         })
 
         // toggle , add and count or decrement and remove
-        app.post('/api/lessons/:lessonId/favorite',verifyToken,verifyUser, async (req, res) => {
+        app.post('/api/lessons/:lessonId/favorite', verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const data = req.body;
             const query = { lessonId: lessonId, userId: data.userId };
@@ -546,7 +566,7 @@ async function run() {
         })
 
         // delete favorite lesson;
-        app.delete('/api/lesson/delete-favorite/:favoriteLessonId',verifyToken,verifyUser, async (req, res) => {
+        app.delete('/api/lesson/delete-favorite/:favoriteLessonId', verifyToken, verifyUser, async (req, res) => {
             const { favoriteLessonId } = req.params;
             const query = { _id: new ObjectId(favoriteLessonId) }
             const deleteFromFavorite = await favoritesCollection.deleteOne(query);
@@ -565,7 +585,7 @@ async function run() {
         })
 
         // create a comment;
-        app.post('/api/lesson/create-comment/:lessonId',verifyToken,verifyUser, async (req, res) => {
+        app.post('/api/lesson/create-comment/:lessonId', verifyToken, verifyUser, async (req, res) => {
             const { lessonId } = req.params;
             const commentData = req.body;
             const newCommentData = {
@@ -586,7 +606,7 @@ async function run() {
         //----------lessons Report related apis----------
 
         // get reports in a single lesson;
-        app.get('/api/reported-lessons',verifyToken,verifyAdmin, async (req, res) => {
+        app.get('/api/reported-lessons', verifyToken, verifyAdmin, async (req, res) => {
 
 
             const pipeline = [
@@ -628,7 +648,7 @@ async function run() {
         })
 
         // create a report in a single lesson;
-        app.post('/api/lesson/create-report',verifyToken, verifyUser, async (req, res) => {
+        app.post('/api/lesson/create-report', verifyToken, verifyUser, async (req, res) => {
 
             const reportData = req.body;
             const addReport = {
@@ -640,7 +660,7 @@ async function run() {
         })
 
         // clear all report from a lesson;
-        app.delete('/api/delete-reports/:lessonId',verifyToken, verifyAdmin, async (req, res) => {
+        app.delete('/api/delete-reports/:lessonId', verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const query = { lessonId: lessonId }
             const result = await lessonsReportsCollection.deleteMany(query);
@@ -648,7 +668,7 @@ async function run() {
         })
 
         // delete reported lesson and all reports from this lesson;
-        app.delete('/api/delete-reports/lesson/:lessonId',verifyToken,verifyAdmin, async (req, res) => {
+        app.delete('/api/delete-reports/lesson/:lessonId', verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const query = { lessonId: lessonId }
             const deleteReport = await lessonsReportsCollection.deleteMany(query);
@@ -661,7 +681,7 @@ async function run() {
 
 
         // -----payment info and update user isPremium: true;--------
-        app.post('/api/payment-info',verifyToken,verifyUser, async (req, res) => {
+        app.post('/api/payment-info', verifyToken, verifyUser, async (req, res) => {
             const paymentInfo = req.body;
             const newData = {
                 ...paymentInfo,
