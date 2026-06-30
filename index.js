@@ -473,7 +473,7 @@ async function run() {
 
 
         // delete lesson permanently;
-        app.delete('/api/delete-lesson/:lessonId',verifyToken, verifyAdmin, async (req, res) => {
+        app.delete('/api/delete-lesson/:lessonId/admin',verifyToken, verifyAdmin, async (req, res) => {
             const { lessonId } = req.params;
             const result = await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
             res.send(result)
