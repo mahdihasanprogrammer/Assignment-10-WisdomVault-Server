@@ -111,7 +111,7 @@ async function run() {
             const { userId } = req.params;
             const changeRole = req.body;
             const query = { _id: new ObjectId(userId) }
-            const result = await userCollection.updateOne(query, { $set: { role: changeRole.updateRole } })
+            const result = await userCollection.updateOne(query, { $set: { userRole: changeRole.updateRole } })
             res.send(result)
         })
 
